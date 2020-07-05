@@ -16,7 +16,11 @@ app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static('public'));
 
 // connecting to mongodb database
-mongoose.connect('mongodb://localhost:27017/todolistDB', { useNewUrlParser: true, useUnifiedTopology: true, useFindAndModify: false });
+mongoose.connect('mongodb://localhost:27017/todolistDB', {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+  useFindAndModify: false,
+});
 
 // create document schema
 const itemSchema = {
@@ -48,33 +52,22 @@ const listSchema = {
 
 const List = new mongoose.model('List', listSchema);
 
-app.get('/', (req, res) => {
-  // read items from the database
-  Item.find({}, (err, foundItems) => {
-    // if there are any issues, log em
-    if (err) {
-      console.log(err);
+app.get('/', async (req, res) => {
+
+  try {
+    const foundItems = await Item.find({});
+    if (foundItems.length === 0) {
+      await Item.insertMany(defaultItems);
+      res.redirect('/');
     } else {
-
-      // if collection is empty [no items]
-      if (foundItems.length === 0) {
-        Item.insertMany(defaultItems, (err) => {
-          if (err) {
-            console.log(err);
-          } else {
-            console.log('Items successfully entered.');
-          }
-        });
-
-        res.redirect('/');
-      } else {
-        res.render('list', { listTitle: 'Today', newListItems: foundItems });
-      }
+      res.render('list', { listTitle: 'Today', newListItems: foundItems });
     }
-  });
+  } catch (err) {
+    console.log(err);
+  }
 });
 
-app.post('/', (req, res) => {
+app.post('/', async (req, res) => {
   const itemName = req.body.newItem;
   const listName = req.body.list;
 
@@ -82,78 +75,64 @@ app.post('/', (req, res) => {
     name: itemName,
   });
 
-  if (listName === 'Today') {
-    item.save();
-    res.redirect('/');
-  } else {
-    List.findOne({ name: listName }, (err, foundList) => {
-      if (err) {
-        console.log(err);
-      } else {
-        foundList.items.push(item);
-        foundList.save();
-        res.redirect(`/${listName}`);
-      }
-    });
+  try {
+    if (listName === 'Today') {
+      await item.save();
+      res.redirect('/');
+    } else {
+      const foundList = await List.findOne({ name: listName });
+      await foundList.items.push(item);
+      await foundList.save();
+      res.redirect(`/${listName}`);
+    }
+  } catch (err) {
+    console.log(err);
   }
 });
 
-app.post('/delete', (req, res) => {
+app.post('/delete', async (req, res) => {
 
   const checkedItemId = req.body.checkbox;
   const listName = req.body.listName;
 
-  if (listName === 'Today') {
-    Item.findByIdAndRemove(checkedItemId, (err) => {
-      if (err) {
-        console.log(err);
-      } else {
-        console.log('Successfully deleted item.');
-        res.redirect('/');
-      }
-    });
-  } else {
-    List.findOneAndUpdate({ name: listName },
-      { $pull: { items: { _id: checkedItemId } } },
-      (err, foundlist) => {
-        if (err) {
-          console.log(err);
-        } else {
-          res.redirect(`/${listName}`);
-        }
-      });
-  }
-
-});
-
-app.get('/:customListName', (req, res) => {
-  const customListName = _.lowerCase(req.params.customListName);
-
-  List.findOne({ name: customListName }, (err, foundList) => {
-    if (err) {
-      console.log(err);
+  try {
+    if (listName === 'Today') {
+      await Item.findByIdAndRemove(checkedItemId);
+      console.log('Successfully deleted item.');
+      res.redirect('/');
     } else {
-      if (foundList) {
-        // show existing list
-        res.render('list', { listTitle: foundList.name, newListItems: foundList.items });
-      } else {
-        // create new list
-        const list = new List({
-          name: customListName,
-          items: defaultItems,
-        });
-
-        list.save(() => {
-          res.redirect(`/${customListName}`);
-        });
-      }
+      const foundList = await List.findOneAndUpdate({ name: listName }, { $pull: { items: { _id: checkedItemId } } });
+      res.redirect(`${listName}`);
     }
-  });
-
+  } catch (err) {
+    console.log(err);
+  }
 });
 
+// moved before parametered route to ensure this gets used
 app.get('/about', (req, res) => {
   res.render('about');
+});
+
+app.get('/:customListName', async (req, res) => {
+  const customListName = _.lowerCase(req.params.customListName);
+
+  try {
+    const foundList = await List.findOne({ name: customListName });
+    if (foundList) {
+      res.render('list', { listTitle: foundList.name, newListItems: foundList.items });
+    } else {
+      // create new list
+      const list = new List({
+        name: customListName,
+        items: defaultItems,
+      });
+      await list.save();
+      res.redirect(`/${customListName}`);
+    }
+  } catch (err) {
+    console.log(err);
+  }
 });
 
 app.listen(3000, () => {
