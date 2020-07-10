@@ -16,7 +16,10 @@ app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static('public'));
 
 // connecting to mongodb database
-mongoose.connect('mongodb://localhost:27017/todolistDB', {
+const user = process.env.MDB_USER;
+const pass = process.env.MDB_SECRET;
+
+mongoose.connect(`mongodb://${user}:${pass}@cluster0-shard-00-00.u2ymp.mongodb.net:27017,cluster0-shard-00-01.u2ymp.mongodb.net:27017,cluster0-shard-00-02.u2ymp.mongodb.net:27017/todolistDB?ssl=true&replicaSet=atlas-gusmsf-shard-0&authSource=admin&retryWrites=true&w=majority`, {
   useNewUrlParser: true,
   useUnifiedTopology: true,
   useFindAndModify: false,
